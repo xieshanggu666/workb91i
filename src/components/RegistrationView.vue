@@ -59,7 +59,7 @@ async function withdraw(r) {
   try {
     const res = await store.withdrawRegistration(r.id, note.value)
     const im = res.impact
-    showToast(`✅ 已退报。同步处理：弃权 ${im.walkover} 场 · 取消成绩 ${im.voided} 场${im.entries ? ' · 田径成绩 ' + im.entries + ' 条' : ''}`)
+    showToast(`✅ 已退报。同步处理：弃权 ${im.walkover} 场 · 取消成绩 ${im.voided} 场${im.cascade ? ' · 级联取消后续对阵 ' + im.cascade + ' 场' : ''}${im.entries ? ' · 田径成绩 ' + im.entries + ' 条' : ''}`)
     cancelAct()
   } catch (e) { showToast('⚠️ ' + e.message) }
 }
@@ -67,7 +67,7 @@ async function revoke(r) {
   try {
     const res = await store.revokeRegistration(r.id, note.value)
     const im = res.impact
-    showToast(`✅ 已撤销资格。同步处理：弃权 ${im.walkover} 场 · 取消成绩 ${im.voided} 场${im.entries ? ' · 田径成绩 ' + im.entries + ' 条' : ''}`)
+    showToast(`✅ 已撤销资格。同步处理：弃权 ${im.walkover} 场 · 取消成绩 ${im.voided} 场${im.cascade ? ' · 级联取消后续对阵 ' + im.cascade + ' 场' : ''}${im.entries ? ' · 田径成绩 ' + im.entries + ' 条' : ''}`)
     cancelAct()
   } catch (e) { showToast('⚠️ ' + e.message) }
 }
@@ -133,6 +133,7 @@ const unitColor = uid => store.unitOfUid(uid)?.color || '#ccc'
           <p>· <span class="tag gray">已退报</span> / <span class="tag r">已撤销</span> 时同步处理受影响的对阵及成绩：</p>
           <p style="padding-left:14px">— 未赛场次：判弃权，对手 <b>3:0</b> 胜；</p>
           <p style="padding-left:14px">— 已赛场次：<b>取消该场成绩</b>，重算积分榜与奖牌；</p>
+          <p style="padding-left:14px">— 淘汰赛：半决赛成绩取消后，由其衍生的后续轮次对阵（决赛/季军战）<b>级联取消</b>，执法安排同步解除并留痕；</p>
           <p style="padding-left:14px">— 田径项目：删除该运动员成绩并重排名。</p>
         </div>
       </div>

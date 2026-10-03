@@ -770,6 +770,25 @@ function rejectRegistration(regId, note, reviewer) {
   return { ok: true }
 }
 
+// 淘汰赛级联：半决赛成绩被取消（退报/撤销）后，由其胜/负结果衍生的后续轮次（决赛/季军战）
+// 对阵随之失效——同步取消场次、解除在派执法安排并留痕；积分榜与奖牌由后续重算自动校正
+function voidKnockoutDownstream(sportId, tag, reason, operator) {
+  const semis = all(`SELECT * FROM matches WHERE sport_id=? AND stage='半决赛'`, sportId)
+  if (!semis.length) return 0
+  // 半决赛全部完赛且均有胜方时，后续轮次对阵才有效；否则衍生对阵失去资格
+  if (semis.every(s => s.status === 'finished' && s.winner != null)) return 0
+  const note = `对阵失效·上游半决赛成绩取消(${tag})`
+  let n = 0
+  all(`SELECT * FROM matches WHERE sport_id=? AND stage IN ('决赛','季军') AND status IN ('scheduled','finished')`, sportId)
+    .forEach(d => {
+      run(`UPDATE matches SET status='void', score_a=NULL, score_b=NULL, tb_a=NULL, tb_b=NULL, winner=NULL, note=? WHERE id=?`, note, d.id)
+      releaseAssignmentsOfMatch(d, note, operator)
+      addLog('void_release', d.id, null, `${matchTitle(get('SELECT * FROM matches WHERE id=?', d.id))}：上游半决赛成绩取消，后续轮次对阵失效，场次级联取消`, reason, operator)
+      n++
+    })
+  return n
+}
+
 // 退报（单位主动）/ 撤销资格（组委会）：同步处理受影响的对阵及成绩
 function withdrawOrRevoke(regId, action, note, reviewer) {
   const reg = get('SELECT * FROM registrations WHERE id=?', regId)
@@ -778,7 +797,7 @@ function withdrawOrRevoke(regId, action, note, reviewer) {
   const newStatus = action === 'withdraw' ? 'withdrawn' : 'revoked'
   const reason = note || (action === 'withdraw' ? '单位退报' : '组委会撤销资格')
   run(`UPDATE registrations SET status=?, review_note=?, reviewed_at=datetime('now','localtime'), reviewer=? WHERE id=?`, newStatus, reason, reviewer || '组委会', regId)
-  const impact = { voided: 0, walkover: 0, entries: 0 }
+  const impact = { voided: 0, walkover: 0, cascade: 0, entries: 0 }
   if (reg.kind === 'team') {
     run(`UPDATE teams SET status=? WHERE id=?`, newStatus, reg.team_id)
     // 同步处理受影响的对阵
@@ -799,6 +818,11 @@ function withdrawOrRevoke(regId, action, note, reviewer) {
         releaseAssignmentsOfMatch(m, action === 'withdraw' ? '成绩取消(退报)' : '成绩取消(撤销资格)', reviewer || '系统')
       }
     })
+    // 淘汰赛后续轮次级联：半决赛成绩取消 → 由其衍生的决赛/季军战对阵失效，不得沿用
+    const spo = get('SELECT format FROM sports WHERE id=?', reg.sport_id)
+    if (spo.format === 'knockout' || spo.format === 'group_knockout') {
+      impact.cascade = voidKnockoutDownstream(reg.sport_id, action === 'withdraw' ? '退报' : '撤销资格', reason, reviewer || '系统')
+    }
     rebuildStandings(reg.sport_id)
   } else {
     run(`UPDATE athletes SET status=? WHERE id=?`, newStatus, reg.athlete_id)
