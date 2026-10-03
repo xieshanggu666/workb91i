@@ -55,19 +55,24 @@ async function reject(r) {
   try { await store.rejectRegistration(r.id, note.value); showToast('✅ 已驳回报名'); cancelAct() }
   catch (e) { showToast('⚠️ ' + e.message) }
 }
+const impactText = im => {
+  const parts = [`弃权 ${im.walkover} 场`, `取消成绩 ${im.voided} 场`]
+  if (im.replacements) parts.push(`淘汰赛递补 ${im.replacements} 场`)
+  if (im.cascade) parts.push(`后续轮次级联调整 ${im.cascade} 场`)
+  if (im.entries) parts.push(`田径成绩 ${im.entries} 条`)
+  return parts.join(' · ')
+}
 async function withdraw(r) {
   try {
     const res = await store.withdrawRegistration(r.id, note.value)
-    const im = res.impact
-    showToast(`✅ 已退报。同步处理：弃权 ${im.walkover} 场 · 取消成绩 ${im.voided} 场${im.entries ? ' · 田径成绩 ' + im.entries + ' 条' : ''}`)
+    showToast(`✅ 已退报。同步处理：${impactText(res.impact)}`)
     cancelAct()
   } catch (e) { showToast('⚠️ ' + e.message) }
 }
 async function revoke(r) {
   try {
     const res = await store.revokeRegistration(r.id, note.value)
-    const im = res.impact
-    showToast(`✅ 已撤销资格。同步处理：弃权 ${im.walkover} 场 · 取消成绩 ${im.voided} 场${im.entries ? ' · 田径成绩 ' + im.entries + ' 条' : ''}`)
+    showToast(`✅ 已撤销资格。同步处理：${impactText(res.impact)}`)
     cancelAct()
   } catch (e) { showToast('⚠️ ' + e.message) }
 }
